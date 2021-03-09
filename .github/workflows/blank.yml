@@ -1,48 +1,16 @@
-name: Docker
-
-on:
+name: Docker Image CI/CD # workflow名称，可以随意改
+on: # workflow的事件钩子，告知程序说明时候出发自动部署
   push:
-    # 每次 push tag 时进行构建，不需要每次 push 都构建。使用通配符匹配每次 tag 的提交，记得 tag 名一定要以 v 开头
-    tags:
-      - v*
-
-env:
-  # 设置 docker 镜像名
-  IMAGE_NAME: decrypt_wechat_database
-
+    branches: [ main ] # 在master分支有push操作的时候自动部署
 jobs:
-  push:
-    # 如果需要在构建前进行测试的话需要取消下面的注释和上面对应的 test 动作的注释。
-    # needs: test
-
-    runs-on: ubuntu-latest
+  build: # 打包并上传docker镜像
+    runs-on: ubuntu-latest # 依赖的环境      
     steps:
       - uses: actions/checkout@v2
-        # 构建镜像，指定镜像名
-      - name: Build image
-        run: docker build . --file Dockerfile --tag $IMAGE_NAME
-        # 登录到 dockerhub，使用 GitHub secrets 传入账号密码，密码被加密存储在 GitHub 服务器，添加方法见下图。
-      - name: Log into registry
-        run: echo "${{ secrets.a_access_token }}" | docker login -u wangyahui --password-stdin
-      - name: Push image
-        run: |
-          IMAGE_ID=wangyahui/$IMAGE_NAME
-
-          # 将所有的大写字母转为小写
-          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-
-          # 从 GitHub.ref 中取出版本
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
-
-          # 从 tag 名字中替换 v 字符
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
-
-          # Use Docker `latest` tag convention
-          [ "$VERSION" == "master" ] && VERSION=latest
-
-          echo IMAGE_ID=$IMAGE_ID
-          echo VERSION=$VERSION
-          # 设置镜像 id 和版本号
-          docker tag $IMAGE_NAME $IMAGE_ID:$VERSION
-          # 进行 push
-          docker push $IMAGE_ID:$VERSION
+      - name: Build Image
+      # ${{ secrets.DOCKER_REPOSITORY }}是读取之前在Secret创建的名为DOCKER_REPOSITORY的值
+        run: docker build -t ${{ secrets.DOCKER_REPOSITORY }}:latest ./ # 打包并docker镜像，版本为latest
+      - name: Login to Registry # 登录阿里云镜像服务器
+        run: docker login --username=${{ secrets.DOCKER_USERNAME }} --password ${{ secrets.DOCKER_PASSWORD }} registry.cn-hangzhou.aliyuncs.com
+      - name: Push Image # 推送镜像，设置版本为latest
+        run: docker push ${{ secrets.DOCKER_REPOSITORY }}:latest
